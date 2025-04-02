@@ -7,7 +7,11 @@ import { docco } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 import ResultsComponent from './ResultsComponent'
 
-function QueryComponent(props: { queryText: string, onRun: (queryText: string) => void }) {
+function QueryComponent(props: {
+  queryText: string,
+  readonly: boolean,
+  onRun: (queryText: string) => void
+}) {
   // see details https://pglite.dev/docs/framework-hooks/react#usepglite
   const db = usePGlite();
 
@@ -15,10 +19,15 @@ function QueryComponent(props: { queryText: string, onRun: (queryText: string) =
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [firstRun, setFirstRun] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [queryText, setQueryText] = useState(props.queryText);
   const [results, setResults] = useState<Results<unknown> | undefined>(undefined);
 
   const query = async () => {
+    if (!firstRun) {
+      // show we are running the query again
+      setLoading(true);
+    }
     setError('');
     try {
       const results = await db.query(
@@ -35,14 +44,21 @@ function QueryComponent(props: { queryText: string, onRun: (queryText: string) =
     catch (exception) {
       setError(`${exception}`);
     }
+
+    // without a timeout quick queries have zero feedback
+    setTimeout(() => {
+      setLoading(false);
+    }, 200);
   }
 
   return (
     <>
       <div className="mb-3">
-        {!editing
+        {props.readonly || !editing
           ? <SyntaxHighlighter language="sql" style={docco} onClick={() => {
-            setEditing(true);
+            if (!props.readonly) {
+              setEditing(true);
+            }
           }}>
             {queryText}
           </SyntaxHighlighter>
@@ -50,8 +66,15 @@ function QueryComponent(props: { queryText: string, onRun: (queryText: string) =
         }
       </div>
       <div className="mb-3">
-        <button className={"btn " + (error ? 'btn-danger' : success ? 'btn-success' : 'btn-primary')} onClick={query}>
-          {success ? '✓' : 'Run query'}</button>
+        {
+          loading
+            ? <button className="btn btn-secondary" type="button" disabled>
+              <span className="spinner-border spinner-border-sm" aria-hidden="true"></span>
+              <span className="visually-hidden" role="status">Loading...</span>
+            </button>
+            : <button className={"btn " + (error ? 'btn-danger' : success ? 'btn-success' : 'btn-primary')} onClick={query}>
+              {success ? '✓' : 'Run query'}</button>
+        }
       </div>
       <ResultsComponent scrollIntoView={firstRun} results={results} key="pgliteItems"></ResultsComponent>
       {error && <div className="alert alert-danger" role="alert">
